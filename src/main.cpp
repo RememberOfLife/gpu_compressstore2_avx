@@ -114,7 +114,7 @@ int main()
     output = fopen("./cpu_data.csv", "w+");
     fprintf(
         output,
-        "data type;element count;mask distribution kind;selectivity;runtime "
+        "approach;data type;element count;mask distribution kind;selectivity;runtime "
         "(ms);\n");
     if (!output) {
         printf("could not open file 1\n");
