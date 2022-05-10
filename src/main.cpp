@@ -89,7 +89,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
         exit(1);
     }
     fprintf(
-        cpu_avx, "|%s|%lu|%s|%f|%f|\n", type_str, b.N, mask_str[mt], ms,
+        cpu_avx, "%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
         t_cpu_avx);
 #endif
 }
