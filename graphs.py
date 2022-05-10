@@ -13,6 +13,7 @@ import multiprocessing
 import os
 import time
 import math
+import functools
 import numpy as np
 
 # columns
@@ -202,11 +203,13 @@ def abort_plot(plot_name):
 # graph generators
 
 
-def throughput_over_selectivity(data, log=False, use_runtime=False):
+def throughput_over_selectivity(data, log=False, use_runtime=False, name_appendage=None):
     y_axis_name = ("runtime" if use_runtime else "throughput")
     plot_name = (
         y_axis_name
-        + "_over_selectivity" + ("_log" if log else "") + ".png"
+        + "_over_selectivity"
+        + (f"_{name_appendage}" if name_appendage else "") +
+        ("_log" if log else "") + ".png"
     )
     fig, ax = plt.subplots(1, dpi=200, figsize=(16, 7))
     ax.set_xlabel("selectivity")
@@ -217,7 +220,9 @@ def throughput_over_selectivity(data, log=False, use_runtime=False):
 
     max_elem_count = max_col_val(data, ELEMENT_COUNT_COL)
     ax.set_title(y_axis_name +
-                 f" over selectivity (element count = {max_elem_count})")
+                 " over selectivity "
+                 + (f"for {name_appendage} " if name_appendage else "")
+                 + "(element count = {max_elem_count})")
 
     elem_count_filtered = filter_col_val(
         data, ELEMENT_COUNT_COL, max_elem_count)
@@ -341,7 +346,12 @@ def main():
     jobs = [
         lambda: throughput_over_selectivity(data_avg),
     ]
-
+    mdks = unique_col_vals(data_avg, MASK_DISTRIBUTION_KIND_COL)
+    for m in mdks:
+        jobs.append(functools.partial(lambda m: throughput_over_selectivity(
+            filter_col_val(data_avg, MASK_DISTRIBUTION_KIND_COL, m),
+            name_appendage=m), m)
+        )
     # parallel(jobs)
     sequential(jobs)
 
