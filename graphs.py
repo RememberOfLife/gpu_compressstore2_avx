@@ -42,6 +42,8 @@ markers = ['^', '^', '+', '<', 'x', '1', '2', '*', '>', '2', 'D',
 data_type_sizes = {
     "float": 4,
     "double": 8,
+    "uint8_t": 4,
+    "uint16_t": 4,
     "uint32_t": 4,
     "uint64_t": 8
 }

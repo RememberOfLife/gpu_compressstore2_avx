@@ -26,15 +26,13 @@ const char* mask_str[3] = {
     "multi-cluster",
 };
 
-template <typename T>
-struct bufs {
+template <typename T> struct bufs {
     uint64_t N;
     T* in;
     T* out1;
     T* out2;
     uint8_t* mask;
-    bufs(uint64_t N):
-        N(N)
+    bufs(uint64_t N) : N(N)
     {
         in = (T*)malloc(N * sizeof(T));
         out1 = (T*)malloc(N * sizeof(T));
@@ -77,7 +75,9 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     float t_cpu_st = 0;
     t_cpu_st += launch_cpu_single_thread(b.in, b.mask, b.out1, b.N);
     t_cpu_st /= REPS;
-    fprintf(cpu_st, "|%s|%lu|%s|%f|%f|\n", type_str, b.N, mask_str[mt], ms, t_cpu_st);
+    fprintf(
+        cpu_st, "%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+        t_cpu_st);
 
     // run avx, if enabled
 #ifdef AVXPOWER
@@ -88,15 +88,16 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
         fprintf(stderr, "VALIDATION FAILURE\n");
         exit(1);
     }
-    fprintf(cpu_avx, "|%s|%lu|%s|%f|%f|\n", type_str, b.N, mask_str[mt], ms, t_cpu_avx);
+    fprintf(
+        cpu_avx, "|%s|%lu|%s|%f|%f|\n", type_str, b.N, mask_str[mt], ms,
+        t_cpu_avx);
 #endif
 }
 
-template <typename T>
-void benchmark_type(const char* type_str)
+template <typename T> void benchmark_type(const char* type_str)
 {
     printf("type: %s", type_str);
-    for (uint64_t N = 1024; N <= (1<<20); N *= 2) {
+    for (uint64_t N = 1024; N <= (1 << 20); N *= 2) {
         for (float ms = 0.1; ms < 1.0; ms += 0.1) {
             benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
             benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
@@ -109,7 +110,7 @@ void benchmark_type(const char* type_str)
 
 int main()
 {
-    cpu_st = fopen("./data/cpu_st.csv", "w+");
+    cpu_st = fopen("./cpu_st.csv", "w+");
     if (!cpu_st) {
         printf("could not open file 1\n");
         exit(1);
@@ -123,7 +124,7 @@ int main()
 #endif
 
     setbuf(stdout, NULL);
-    
+
     benchmark_type<uint8_t>("uint8_t");
     benchmark_type<uint16_t>("uint16_t");
     benchmark_type<uint32_t>("uint32_t");
