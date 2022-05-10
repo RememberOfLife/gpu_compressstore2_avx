@@ -71,25 +71,25 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     uint64_t popc;
 
     // run cpu singlethreaded
-    float t_cpu_st = 0;
-    t_cpu_st += launch_cpu_single_thread(b.in, b.mask, b.out1, b.N, &popc);
-    t_cpu_st /= REPS;
-    fprintf(
-        output, "cpu_st;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
-        t_cpu_st);
+    for (int i = 0; i < REPS; i++) {
+        float t_cpu_st = launch_cpu_single_thread(b.in, b.mask, b.out1, b.N, &popc);
+        fprintf(
+            output, "cpu_st;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+            t_cpu_st);
+    }
 
     // run avx, if enabled
 #ifdef AVXPOWER
-    float t_cpu_avx = 0;
-    t_cpu_avx += launch_avx_compressstore(b.in, b.mask, b.out2, N);
-    t_cpu_avx /= REPS;
+    for (int i = 0; i < REPS; i++) {
+        t_cpu_avx += launch_avx_compressstore(b.in, b.mask, b.out2, N);
+        fprintf(
+            output, "cpu_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+            t_cpu_avx);
+    }
     if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
         fprintf(stderr, "VALIDATION FAILURE\n");
         exit(1);
     }
-    fprintf(
-        output, "cpu_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
-        t_cpu_avx);
 #endif
 }
 
