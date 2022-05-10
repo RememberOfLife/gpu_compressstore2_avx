@@ -9,10 +9,7 @@
 
 #define REPS 10
 
-FILE* cpu_st;
-#ifdef AVXPOWER
-FILE* cpu_avx;
-#endif
+FILE* output;
 
 enum MASK_TYPE {
     MASK_TYPE_UNIFORM,
@@ -76,7 +73,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     t_cpu_st += launch_cpu_single_thread(b.in, b.mask, b.out1, b.N);
     t_cpu_st /= REPS;
     fprintf(
-        cpu_st, "%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+        output, "cpu_st;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
         t_cpu_st);
 
     // run avx, if enabled
@@ -89,7 +86,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
         exit(1);
     }
     fprintf(
-        cpu_avx, "%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+        output, "cpu_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
         t_cpu_avx);
 #endif
 }
@@ -100,7 +97,9 @@ template <typename T> void benchmark_type(const char* type_str)
     for (uint64_t N = 1024; N <= (1 << 20); N *= 2) {
         for (float ms = 0.1; ms < 1.0; ms += 0.1) {
             benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
+            printf(".");
             benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
+            printf(".");
             benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
             printf(".");
         }
@@ -110,22 +109,15 @@ template <typename T> void benchmark_type(const char* type_str)
 
 int main()
 {
-    cpu_st = fopen("./cpu_st.csv", "w+");
+    output = fopen("./cpu_data.csv", "w+");
     fprintf(
-        cpu_st,
+        output,
         "data type;element count;mask distribution kind;selectivity;runtime "
         "(ms);\n");
-    if (!cpu_st) {
+    if (!output) {
         printf("could not open file 1\n");
         exit(1);
     }
-#ifdef AVXPOWER
-    cpu_avx = fopen("./cpu_avx.csv", "w+");
-    if (!cpu_avx) {
-        printf("could not open file 2\n");
-        exit(1);
-    }
-#endif
 
     setbuf(stdout, NULL);
 
@@ -135,9 +127,6 @@ int main()
     benchmark_type<uint32_t>("uint32_t");
     benchmark_type<uint64_t>("uint64_t");
 
-    fclose(cpu_st);
-#ifdef AVXPOWER
-    fclose(cpu_avx);
-#endif
+    fclose(output);
     return 0;
 }
