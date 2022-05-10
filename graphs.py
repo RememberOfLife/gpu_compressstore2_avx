@@ -272,7 +272,7 @@ def read_csv(path):
     data = []
     with open(path) as file:
         reader = csv.reader(file, delimiter=';')
-        header = next(reader)  # skip header
+        _header = next(reader)  # skip header
 
         for csv_row in reader:
             data_row = [None] * COLUMN_COUNT
@@ -288,10 +288,10 @@ def read_csv(path):
                 data_row[ELEMENT_COUNT_COL]
             ) / data_row[RUNTIME_MS_COL] * 1000 / 2**30
             data_row[CASE_COL] = (
-                data_row[MASK_DISTRIBUTION_KIND_COL]
-                + "-" + data_row[APPROACH_COL] + "-"
-                data_row[DATA_TYPE_COL] +
-
+                data_row[APPROACH_COL] + "-"
+                + data_row[MASK_DISTRIBUTION_KIND_COL]
+                + "-"
+                + data_row[DATA_TYPE_COL]
             )
             data.append(data_row)
     return data
