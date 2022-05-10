@@ -68,9 +68,11 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
         } break;
     }
 
+    uint64_t popc;
+
     // run cpu singlethreaded
     float t_cpu_st = 0;
-    t_cpu_st += launch_cpu_single_thread(b.in, b.mask, b.out1, b.N);
+    t_cpu_st += launch_cpu_single_thread(b.in, b.mask, b.out1, b.N, &popc);
     t_cpu_st /= REPS;
     fprintf(
         output, "cpu_st;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
@@ -81,7 +83,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     float t_cpu_avx = 0;
     t_cpu_avx += launch_avx_compressstore(b.in, b.mask, b.out2, N);
     t_cpu_avx /= REPS;
-    if (VALIDATION && memcmp(b.out1, b.out2, N * sizeof(T)) != 0) {
+    if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
         fprintf(stderr, "VALIDATION FAILURE\n");
         exit(1);
     }

@@ -4,7 +4,7 @@
 #include <cstdint>
 
 template <typename T>
-float launch_cpu_single_thread(T* input, uint8_t* mask, T* output, uint64_t N)
+float launch_cpu_single_thread(T* input, uint8_t* mask, T* output, uint64_t N, uint64_t* popc)
 {
     std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();
     uint64_t val_idx = 0;
@@ -19,5 +19,6 @@ float launch_cpu_single_thread(T* input, uint8_t* mask, T* output, uint64_t N)
         }
     }
     std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
+    *popc = val_idx;
     return static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
 }
