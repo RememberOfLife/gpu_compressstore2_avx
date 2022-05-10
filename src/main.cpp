@@ -111,6 +111,10 @@ template <typename T> void benchmark_type(const char* type_str)
 int main()
 {
     cpu_st = fopen("./cpu_st.csv", "w+");
+    fprintf(
+        cpu_st,
+        "data type;element count;mask distribution kind;selectivity;runtime "
+        "(ms);\n");
     if (!cpu_st) {
         printf("could not open file 1\n");
         exit(1);

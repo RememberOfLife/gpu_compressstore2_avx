@@ -331,7 +331,8 @@ def jitter_filter(data, max_dev):
 
 
 def main():
-    data_raw = read_csv(sys.argv[1])
+    filename = sys.argv[1] if len(sys.argv) > 1 else "cpu_st.csv"
+    data_raw = read_csv(filename)
 
     # average runs since we basically always need this
     data_avg = average_columns(data_raw, [RUNTIME_MS_COL])
