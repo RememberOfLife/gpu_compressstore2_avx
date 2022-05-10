@@ -81,7 +81,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     // run avx, if enabled
 #ifdef AVXPOWER
     for (int i = 0; i < REPS; i++) {
-        t_cpu_avx += launch_avx_compressstore(b.in, b.mask, b.out2, N);
+        float t_cpu_avx = launch_avx_compressstore(b.in, b.mask, b.out2, N);
         fprintf(
             output, "cpu_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
             t_cpu_avx);
