@@ -223,7 +223,7 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
     ax.set_title(y_axis_name +
                  " over selectivity "
                  + (f"for {name_appendage} " if name_appendage else "")
-                 + "(element count = {max_elem_count})")
+                 + f"(element count = {max_elem_count})")
 
     elem_count_filtered = filter_col_val(
         data, ELEMENT_COUNT_COL, max_elem_count)
@@ -258,12 +258,12 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
             label=f"{case}", alpha=0.7)
     ax.set_xticks(unique_col_vals(data, SELECTIVITY_COL))
     if log:
-        ax.set_yscale("log", basey=2)
+        ax.set_yscale("log")
+
     else:
         ax.set_ylim(0)
     fig.subplots_adjust(bottom=0.3, wspace=0.33,
                         left=0.05, right=0.95, top=0.95)
-    #ax.set_position([0.1, 0.1, 0.6, 0.75])
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
     fig.savefig(plot_name)
 
@@ -352,10 +352,17 @@ def main():
     ]
     mdks = unique_col_vals(data_avg, MASK_DISTRIBUTION_KIND_COL)
     for m in mdks:
-        jobs.append(functools.partial(lambda m: throughput_over_selectivity(
-            filter_col_val(data_avg, MASK_DISTRIBUTION_KIND_COL, m),
-            name_appendage=m), m)
-        )
+        for is_log in [False, True]:
+            jobs.append(
+                functools.partial(
+                    lambda args: throughput_over_selectivity(
+                        filter_col_val(
+                            data_avg, MASK_DISTRIBUTION_KIND_COL, args[0]),
+                        name_appendage=args[0], log=args[1]
+                    ),
+                    (m, is_log)
+                )
+            )
     # parallel(jobs)
     sequential(jobs)
 
