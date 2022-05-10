@@ -5,8 +5,6 @@
 #include <cstdint>
 #include <immintrin.h>
 
-#include "benchmark_data.cuh"
-
 #ifdef  AVXPOWER
 
 template <typename T>

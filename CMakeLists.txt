@@ -9,6 +9,7 @@ set(INCLUDES
 
 set(SOURCES
     src/main.cpp
+    src/fast_prng.cpp
 )
 
 add_executable(gpu_compressstore2_avx ${SOURCES})
@@ -21,4 +22,4 @@ endif()
 
 target_include_directories(gpu_compressstore2_avx PRIVATE ${INCLUDES})
 
-set_target_properties(gpu_conflictdetection PROPERTIES EXPORT_COMPILE_COMMANDS true)
+set_target_properties(gpu_compressstore2_avx PROPERTIES EXPORT_COMPILE_COMMANDS true)
