@@ -120,8 +120,8 @@ int main()
         exit(1);
     }
 #ifdef AVXPOWER
-    cpu_st = fopen("./data/cpu_avx.csv", "w+");
-    if (!cpu_st) {
+    cpu_avx = fopen("./cpu_avx.csv", "w+");
+    if (!cpu_avx) {
         printf("could not open file 2\n");
         exit(1);
     }
@@ -129,8 +129,9 @@ int main()
 
     setbuf(stdout, NULL);
 
-    benchmark_type<uint8_t>("uint8_t");
-    benchmark_type<uint16_t>("uint16_t");
+    // both need AVX512_VBMI2 which we don't have ;'(
+    // benchmark_type<uint8_t>("uint8_t");
+    // benchmark_type<uint16_t>("uint16_t");
     benchmark_type<uint32_t>("uint32_t");
     benchmark_type<uint64_t>("uint64_t");
 
