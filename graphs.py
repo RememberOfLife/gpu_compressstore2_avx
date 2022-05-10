@@ -17,11 +17,12 @@ import functools
 import numpy as np
 
 # columns
-DATA_TYPE_COL = 0
-ELEMENT_COUNT_COL = 1
-MASK_DISTRIBUTION_KIND_COL = 2
-SELECTIVITY_COL = 3
-RUNTIME_MS_COL = 4
+APPROACH_COL = 0
+DATA_TYPE_COL = 1
+ELEMENT_COUNT_COL = 2
+MASK_DISTRIBUTION_KIND_COL = 3
+SELECTIVITY_COL = 4
+RUNTIME_MS_COL = 5
 THROUGHPUT_COL = 6
 CASE_COL = 7
 COLUMN_COUNT = 8
@@ -275,6 +276,7 @@ def read_csv(path):
 
         for csv_row in reader:
             data_row = [None] * COLUMN_COUNT
+            data_row[APPROACH_COL] = csv_row[APPROACH_COL]
             data_row[DATA_TYPE_COL] = csv_row[DATA_TYPE_COL]
             data_row[ELEMENT_COUNT_COL] = int(csv_row[ELEMENT_COUNT_COL])
             data_row[MASK_DISTRIBUTION_KIND_COL] = csv_row[MASK_DISTRIBUTION_KIND_COL]
@@ -286,8 +288,10 @@ def read_csv(path):
                 data_row[ELEMENT_COUNT_COL]
             ) / data_row[RUNTIME_MS_COL] * 1000 / 2**30
             data_row[CASE_COL] = (
+                data_row[MASK_DISTRIBUTION_KIND_COL]
+                + "-" + data_row[APPROACH_COL] + "-"
                 data_row[DATA_TYPE_COL] +
-                "-" + data_row[MASK_DISTRIBUTION_KIND_COL]
+
             )
             data.append(data_row)
     return data
@@ -336,7 +340,7 @@ def jitter_filter(data, max_dev):
 
 
 def main():
-    filename = sys.argv[1] if len(sys.argv) > 1 else "cpu_st.csv"
+    filename = sys.argv[1] if len(sys.argv) > 1 else "cpu_data.csv"
     data_raw = read_csv(filename)
 
     # average runs since we basically always need this
