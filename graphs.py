@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#import seaborn as sns
+# import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from matplotlib.axes import Axes
@@ -31,17 +31,19 @@ VIRTUAL_COLUMN_COUNT = 2
 COLUMNS = list(range(0, COLUMN_COUNT))
 
 
-colors = [
-    'darkorange', 'green', 'gold', 'deepskyblue', 'yellow', 'navy',
+COLORS = [
+    'darkorange', 'green', 'gold', 'deepskyblue', 'navy',
     'darkred', 'purple', 'red', 'mediumpurple', 'turquoise',
     'lightgray', 'teal', 'lime', 'seagreen', 'plum', 'lightsteelblue',
     'palevioletred', 'black', 'blue', 'magenta', 'olive', 'goldenrod'
 ]
+COLOR_KEYS: dict[str, str] = {}
 
-markers = ['^', '^', '+', '<', 'x', '1', '2', '*', '>', '2', 'D',
+MARKERS = ['^', '^', '+', '<', 'x', '1', '2', '*', '>', '2', 'D',
            'o', '+', '3', '4', 'D', 'D', 'd', 'd', 'H', 'h', 'p', 'P', 's']
+MARKER_KEYS: dict[str, str] = {}
 
-data_type_sizes = {
+DATA_TYPE_SIZES = {
     "float": 4,
     "double": 8,
     "uint8_t": 4,
@@ -52,11 +54,17 @@ data_type_sizes = {
 
 
 def get_marker_from_str(s):
-    return markers[hash(s) % len(markers)]
+    global MARKER_KEYS
+    if s not in MARKER_KEYS:
+        MARKER_KEYS[s] = MARKERS[len(MARKER_KEYS) % len(MARKERS)]
+    return MARKER_KEYS[s]
 
 
 def get_color_from_str(s):
-    return colors[hash(s) % len(colors)]
+    global COLOR_KEYS
+    if s not in COLOR_KEYS:
+        COLOR_KEYS[s] = COLORS[len(COLOR_KEYS) % len(COLORS)]
+    return COLOR_KEYS[s]
 
 
 def classify(data, classifying_col):
@@ -204,14 +212,17 @@ def abort_plot(plot_name):
 # graph generators
 
 
-def throughput_over_selectivity(data, log=False, use_runtime=False, name_appendage=None):
+def throughput_over_selectivity(data, log=False, use_runtime=False, name_appendage=None, nz=None):
     y_axis_name = ("runtime" if use_runtime else "throughput")
     plot_name = (
         y_axis_name
         + "_over_selectivity"
-        + (f"_{name_appendage}" if name_appendage else "") +
-        ("_log" if log else "") + ".png"
+        + (f"_{name_appendage}" if name_appendage else "")
+        + ("_log" if log else "")
+        + ("_nz" if nz else "")
+        + ".png"
     )
+    y_val_col = RUNTIME_MS_COL if use_runtime else THROUGHPUT_COL
     fig, ax = plt.subplots(1, dpi=200, figsize=(16, 7))
     ax.set_xlabel("selectivity")
     if use_runtime:
@@ -227,7 +238,6 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
 
     elem_count_filtered = filter_col_val(
         data, ELEMENT_COUNT_COL, max_elem_count)
-
     if (
         len(elem_count_filtered) == 0
         or len(unique_col_vals(data, SELECTIVITY_COL)) < 2
@@ -244,12 +254,10 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
         y = []
         for s in selectivities:
             s_rows = by_selectivity[s]
-            if use_runtime:
-                avg = col_average(s_rows, RUNTIME_MS_COL)
-            else:
-                avg = col_average(s_rows, THROUGHPUT_COL)
+            avg = col_average(s_rows, y_val_col)
             y.append(avg)
 
+        ax.set_xlabel("selectivity")
         ax.plot(
             x, y,
             marker=get_marker_from_str(case),
@@ -259,12 +267,15 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
     ax.set_xticks(unique_col_vals(data, SELECTIVITY_COL))
     if log:
         ax.set_yscale("log")
-
+        ax.set_ylim(min_col_val(elem_count_filtered, y_val_col))
     else:
-        ax.set_ylim(0)
+        if not nz:
+            ax.set_ylim(0)
+
     fig.subplots_adjust(bottom=0.3, wspace=0.33,
                         left=0.05, right=0.95, top=0.95)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
+
     fig.savefig(plot_name)
 
 
@@ -272,7 +283,7 @@ def read_csv(path):
     data = []
     with open(path) as file:
         reader = csv.reader(file, delimiter=';')
-        _header = next(reader)  # skip header
+        header = next(reader)  # skip header
 
         for csv_row in reader:
             data_row = [None] * COLUMN_COUNT
@@ -284,7 +295,7 @@ def read_csv(path):
             data_row[RUNTIME_MS_COL] = (float(csv_row[RUNTIME_MS_COL]))
             data_row[THROUGHPUT_COL] = (
                 # 1/8th byte for the mask bit
-                (data_type_sizes[data_row[DATA_TYPE_COL]] + 0.125) *
+                (DATA_TYPE_SIZES[data_row[DATA_TYPE_COL]] + 0.125) *
                 data_row[ELEMENT_COUNT_COL]
             ) / data_row[RUNTIME_MS_COL] * 1000 / 2**30
             data_row[CASE_COL] = (
@@ -343,26 +354,44 @@ def main():
     filename = sys.argv[1] if len(sys.argv) > 1 else "cpu_data.csv"
     data_raw = read_csv(filename)
 
-    # average runs since we basically always need this
-    data_avg = average_columns(data_raw, [RUNTIME_MS_COL])
+    data_avg = average_columns(data_raw, [RUNTIME_MS_COL, THROUGHPUT_COL])
+
+    data_avx = list(
+        filter(lambda row: "avx" in row[APPROACH_COL].lower(), data_avg))
 
     # generate graphs (in parallel)
     jobs = [
         lambda: throughput_over_selectivity(data_avg),
+        lambda: throughput_over_selectivity(data_avg, True),
+        lambda: throughput_over_selectivity(data_avx, name_appendage="avx"),
+        lambda: throughput_over_selectivity(
+            data_avx, name_appendage="avx", nz=True),
+        lambda: throughput_over_selectivity(
+            data_avx, True, name_appendage="avx"),
     ]
+
+    def add_tos_job(jobs, data, log, name_appendage, nz):
+        jobs.append(lambda: throughput_over_selectivity(
+            data, log=log, name_appendage=name_appendage, nz=nz
+        ))
     mdks = unique_col_vals(data_avg, MASK_DISTRIBUTION_KIND_COL)
     for m in mdks:
         for is_log in [False, True]:
-            jobs.append(
-                functools.partial(
-                    lambda args: throughput_over_selectivity(
-                        filter_col_val(
-                            data_avg, MASK_DISTRIBUTION_KIND_COL, args[0]),
-                        name_appendage=args[0], log=args[1]
-                    ),
-                    (m, is_log)
-                )
+            add_tos_job(
+                jobs,
+                filter_col_val(data_avg, MASK_DISTRIBUTION_KIND_COL, m),
+                is_log,
+                m,
+                None
             )
+            if not is_log:
+                add_tos_job(
+                    jobs,
+                    filter_col_val(data_avg, MASK_DISTRIBUTION_KIND_COL, m),
+                    is_log,
+                    m,
+                    True
+                )
     # parallel(jobs)
     sequential(jobs)
 
