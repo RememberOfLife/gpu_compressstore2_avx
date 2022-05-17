@@ -11,7 +11,9 @@
 #include "cpu_st.hpp"
 #include "mask_gen.hpp"
 
-#define OMP_THREAD_LIMIT 64
+#ifndef OMP_THREAD_COUNT
+#define OMP_THREAD_COUNT 64
+#endif
 
 #define VALIDATION true
 
@@ -88,7 +90,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     for (int i = 0; i < REPS; i++) {
         float t_cpu_st = launch_cpu_single_thread(b.in, b.mask, b.out1, b.N, &popc);
         fprintf(
-            output, "cpu_st;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+            output, "cpu_st;1;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
             t_cpu_st);
     }
 
@@ -97,7 +99,7 @@ void benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     for (int i = 0; i < REPS; i++) {
         float t_cpu_avx = launch_avx_compressstore(b.in, b.mask, b.out2, N);
         fprintf(
-            output, "cpu_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+            output, "cpu_avx;1;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
             t_cpu_avx);
     }
     if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
@@ -133,68 +135,70 @@ void mt_benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     uint64_t popc;
 
     launch_cpu_single_thread(b.in, b.mask, b.out2, b.N, &popc);
-    // run cpu multihtreaded
-    for (int i = 0; i < REPS; i++) {
-        std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();
-        const unsigned int TC = omp_get_max_threads();//std::thread::hardware_concurrency();
-        uint64_t lpopc[OMP_THREAD_LIMIT];
-        uint64_t elems_per_thread = b.N / TC;
-        elems_per_thread = (elems_per_thread / 8) * 8;
-        uint64_t overhang_elems = b.N - (TC-1)*elems_per_thread;
-        // use omp parallel for, otherwise we spawn threads and everything gets slower than singlethreaded
-        #pragma omp parallel for
-        for (int i = 0; i < TC; i++) {
-            lpopc[i] = buf_popc(b.mask + i*elems_per_thread/8, i == TC-1 ? overhang_elems : elems_per_thread);
+    for (int tc = 1; tc <= OMP_THREAD_COUNT; tc *= 2) {
+        // run cpu multihtreaded
+        for (int i = 0; i < REPS; i++) {
+            std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();
+            uint64_t lpopc[OMP_THREAD_COUNT];
+            uint64_t elems_per_thread = b.N / tc;
+            elems_per_thread = (elems_per_thread / 8) * 8;
+            uint64_t overhang_elems = b.N - (tc-1)*elems_per_thread;
+            // use omp parallel for, otherwise we spawn threads and everything gets slower than singlethreaded
+            #pragma omp parallel for
+            for (int i = 0; i < tc; i++) {
+                lpopc[i] = buf_popc(b.mask + i*elems_per_thread/8, i == tc-1 ? overhang_elems : elems_per_thread);
+            }
+            for (int i = 0; i < tc-1; i++) {
+                lpopc[i + 1] += lpopc[i];
+            }
+            #pragma omp parallel for
+            for (int i = 0; i < tc; i++) {
+                launch_cpu_single_thread(b.in + i*elems_per_thread, b.mask + i*elems_per_thread/8, b.out1 + (i == 0 ? 0 : lpopc[i - 1]), i == tc-1 ? overhang_elems : elems_per_thread, NULL);
+            }
+            std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
+            float t_cpu_mt = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
+            fprintf(
+                output, "cpu_mt;%u;%s;%lu;%s;%f;%f;\n", tc, type_str, b.N, mask_str[mt], ms,
+                t_cpu_mt);
         }
-        for (int i = 0; i < TC-1; i++) {
-            lpopc[i + 1] += lpopc[i];
+        if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
+            fprintf(stderr, "MT VALIDATION FAILURE\n");
+            assert(0);
+            exit(1);
         }
-        #pragma omp parallel for
-        for (int i = 0; i < TC; i++) {
-            launch_cpu_single_thread(b.in + i*elems_per_thread, b.mask + i*elems_per_thread/8, b.out1 + (i == 0 ? 0 : lpopc[i - 1]), i == TC-1 ? overhang_elems : elems_per_thread, NULL);
-        }
-        std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
-        float t_cpu_mt = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
-        fprintf(
-            output, "cpu_mt;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
-            t_cpu_mt);
-    }
-    if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
-        fprintf(stderr, "MT VALIDATION FAILURE\n");
-        assert(0);
-        exit(1);
     }
 
     // run avx, if enabled
 #ifdef AVXPOWER
-    for (int i = 0; i < REPS; i++) {
-        std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();
-        const unsigned int TC = omp_get_max_threads();//std::thread::hardware_concurrency();
-        uint64_t lpopc[OMP_THREAD_LIMIT];
-        uint64_t elems_per_thread = b.N / TC;
-        elems_per_thread = (elems_per_thread / 8) * 8;
-        uint64_t overhang_elems = b.N - (TC-1)*elems_per_thread;
-        // use omp parallel for, otherwise we spawn threads and everything gets slower than singlethreaded
-        #pragma omp parallel for
-        for (int i = 0; i < TC; i++) {
-            lpopc[i] = buf_popc(b.mask + i*elems_per_thread/8, i == TC-1 ? overhang_elems : elems_per_thread);
+    for (int tc = 1; tc <= OMP_THREAD_COUNT; tc *= 2) {
+        for (int i = 0; i < REPS; i++) {
+            std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();
+            uint64_t lpopc[OMP_THREAD_COUNT];
+            uint64_t elems_per_thread = b.N / tc;
+            elems_per_thread = (elems_per_thread / 8) * 8;
+            uint64_t overhang_elems = b.N - (tc-1)*elems_per_thread;
+            // use omp parallel for, otherwise we spawn threads and everything gets slower than singlethreaded
+            #pragma omp parallel for
+            for (int i = 0; i < tc; i++) {
+                lpopc[i] = buf_popc(b.mask + i*elems_per_thread/8, i == tc-1 ? overhang_elems : elems_per_thread);
+            }
+            for (int i = 0; i < tc-1; i++) {
+                lpopc[i + 1] += lpopc[i];
+            }
+            #pragma omp parallel for
+            for (int i = 0; i < tc; i++) {
+                launch_avx_compressstore(b.in + i*elems_per_thread, b.mask + i*elems_per_thread/8, b.out1 + (i == 0 ? 0 : lpopc[i - 1]), i == tc-1 ? overhang_elems : elems_per_thread);
+            }
+            std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
+            float t_cpu_avx = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
+            fprintf(
+                output, "cpu_m_avx;%u;%s;%lu;%s;%f;%f;\n", tc, type_str, b.N, mask_str[mt], ms,
+                t_cpu_avx);
         }
-        for (int i = 0; i < TC-1; i++) {
-            lpopc[i + 1] += lpopc[i];
+        if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
+            fprintf(stderr, "MT VALIDATION FAILURE\n");
+            exit(1);
         }
-        #pragma omp parallel for
-        for (int i = 0; i < TC; i++) {
-            launch_avx_compressstore(b.in + i*elems_per_thread, b.mask + i*elems_per_thread/8, b.out1 + (i == 0 ? 0 : lpopc[i - 1]), i == TC-1 ? overhang_elems : elems_per_thread);
-        }
-        std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
-        float t_cpu_avx = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
-        fprintf(
-            output, "cpu_m_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
-            t_cpu_avx);
-    }
-    if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
-        fprintf(stderr, "VALIDATION FAILURE\n");
-        exit(1);
     }
 #endif
 }
@@ -202,7 +206,7 @@ void mt_benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
 template <typename T> void benchmark_type(const char* type_str)
 {
     printf("type: %s", type_str);
-    for (uint64_t N = DATASUBSET ? 1<<30 : 1<<10; N <= (1 << 30); N *= 4) {
+    for (uint64_t N = DATASUBSET ? 1<<28 : 1<<10; N <= (1 << 28); N *= 4) {
         float ms = 0.5;
 #if !DATASUBSET
         for (ms = 0.1; ms < 1.0; ms += 0.1) {
@@ -231,7 +235,7 @@ int main()
     output = fopen("./cpu_data.csv", "w+");
     fprintf(
         output,
-        "approach;data type;element count;mask distribution kind;selectivity;runtime "
+        "approach;thread count;data type;element count;mask distribution kind;selectivity;runtime "
         "(ms);\n");
     if (!output) {
         printf("could not open file 1\n");
@@ -240,7 +244,7 @@ int main()
 
     setbuf(stdout, NULL);
     
-    omp_set_num_threads(omp_get_max_threads());
+    omp_set_num_threads(omp_get_max_threads()); // is this even working?
 
     // both uint8_t and uint16_t need AVX512_VBMI2 which we don't have ;'(
     benchmark_type<uint32_t>("uint32_t");
