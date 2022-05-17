@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <bitset>
 
 template <typename T>
 float launch_cpu_single_thread(T* input, uint8_t* mask, T* output, uint64_t N, uint64_t* popc)
@@ -19,6 +20,26 @@ float launch_cpu_single_thread(T* input, uint8_t* mask, T* output, uint64_t N, u
         }
     }
     std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
-    *popc = val_idx;
+    if (popc) {
+        *popc = val_idx;
+    }
     return static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
+}
+
+inline uint64_t buf_popc(uint8_t* mask, uint64_t N)
+{
+    uint64_t* themask = (uint64_t*)mask;
+    uint64_t lpopc = 0;
+    for (uint64_t i = 0; i < N/64; i++) {
+        lpopc += std::bitset<64>(themask[i]).count();
+    }
+    
+    for (uint64_t i = (N/64) * 64; i < N; i++) {
+        uint64_t bi = i / 8;
+        uint64_t bo = i % 8;
+        if ((mask[bi] >> (7 - bo)) & 0b1) {
+            lpopc++;
+        }
+    }
+    return lpopc;
 }

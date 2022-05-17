@@ -3,3 +3,4 @@
 /.cache
 /data
 /.mypy_cache
+/cpu_data.csv
