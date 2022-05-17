@@ -11,10 +11,6 @@
 #include "cpu_st.hpp"
 #include "mask_gen.hpp"
 
-#ifndef OMP_THREAD_COUNT
-#define OMP_THREAD_COUNT 64
-#endif
-
 #define VALIDATION true
 
 #ifndef DATASUBSET
@@ -244,7 +240,7 @@ int main()
 
     setbuf(stdout, NULL);
     
-    omp_set_num_threads(omp_get_max_threads()); // is this even working?
+    omp_set_num_threads(OMP_THREAD_COUNT); // is this even working?
 
     // both uint8_t and uint16_t need AVX512_VBMI2 which we don't have ;'(
     benchmark_type<uint32_t>("uint32_t");

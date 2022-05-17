@@ -6,13 +6,17 @@
 
 #include "fast_prng.hpp"
 
+#ifndef OMP_THREAD_COUNT
+#define OMP_THREAD_COUNT 64
+#endif
+
 inline void create_bitmask_uniform(uint8_t* mask, uint64_t N, float sel)
 {
     #pragma omp parallel for
-    for (int t = 0; t < 32; t++) {
+    for (int t = 0; t < OMP_THREAD_COUNT; t++) {
         fast_prng rng(t);
-        uint8_t* my_mask = mask + (t*N/8/32);
-        uint64_t my_N = N / 32;
+        uint8_t* my_mask = mask + (t*N/8/OMP_THREAD_COUNT);
+        uint64_t my_N = N / OMP_THREAD_COUNT;
         for (int i = 0; i < my_N/8; i++) {
             uint8_t acc = 0;
             for (int j = 7; j >= 0; j--) {
@@ -35,8 +39,8 @@ inline std::vector<uint8_t> create_bitmask(float selectivity, size_t cluster_cou
 
     // start by setting all to zero
     #pragma omp parallel for
-    for (int t = 0; t < 32; t++) {
-        for (int i = t*bitset.size()/32; i < (t+1)*bitset.size()/32; i++) {
+    for (int t = 0; t < OMP_THREAD_COUNT; t++) {
+        for (int i = t*bitset.size()/OMP_THREAD_COUNT; i < (t+1)*bitset.size()/OMP_THREAD_COUNT; i++) {
             bitset[i] = 0;
         }
     }
@@ -56,8 +60,8 @@ inline std::vector<uint8_t> create_bitmask(float selectivity, size_t cluster_cou
     }
 
     #pragma omp parallel for
-    for (int t = 0; t < 32; t++) {
-        for (int i = t*bitset.size()/32; i < (t+1)*bitset.size()/32; i++) {
+    for (int t = 0; t < OMP_THREAD_COUNT; t++) {
+        for (int i = t*bitset.size()/OMP_THREAD_COUNT; i < (t+1)*bitset.size()/OMP_THREAD_COUNT; i++) {
             // set bit of uint8
             if (bitset[i]) {
                 uint8_t current = final_bitmask_cpu[i / 8];
