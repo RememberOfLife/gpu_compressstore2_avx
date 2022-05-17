@@ -162,9 +162,28 @@ void mt_benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
     // run avx, if enabled
 #ifdef AVXPOWER
     for (int i = 0; i < REPS; i++) {
-        float t_cpu_avx = launch_avx_compressstore(b.in, b.mask, b.out2, N);
+        std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();
+        const unsigned int TC = omp_get_max_threads();//std::thread::hardware_concurrency();
+        uint64_t lpopc[OMP_THREAD_LIMIT];
+        uint64_t elems_per_thread = b.N / TC;
+        elems_per_thread = (elems_per_thread / 8) * 8;
+        uint64_t overhang_elems = b.N - (TC-1)*elems_per_thread;
+        // use omp parallel for, otherwise we spawn threads and everything gets slower than singlethreaded
+        #pragma omp parallel for
+        for (int i = 0; i < TC; i++) {
+            lpopc[i] = buf_popc(b.mask + i*elems_per_thread/8, i == TC-1 ? overhang_elems : elems_per_thread);
+        }
+        for (int i = 0; i < TC-1; i++) {
+            lpopc[i + 1] += lpopc[i];
+        }
+        #pragma omp parallel for
+        for (int i = 0; i < TC; i++) {
+            launch_avx_compressstore(b.in + i*elems_per_thread, b.mask + i*elems_per_thread/8, b.out1 + (i == 0 ? 0 : lpopc[i - 1]), i == TC-1 ? overhang_elems : elems_per_thread);
+        }
+        std::chrono::time_point<std::chrono::steady_clock> stop_clock = std::chrono::steady_clock::now();
+        float t_cpu_avx = static_cast<float>(std::chrono::duration_cast<std::chrono::nanoseconds>(stop_clock-start_clock).count()) / 1000000;
         fprintf(
-            output, "cpu_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
+            output, "cpu_m_avx;%s;%lu;%s;%f;%f;\n", type_str, b.N, mask_str[mt], ms,
             t_cpu_avx);
     }
     if (VALIDATION && memcmp(b.out1, b.out2, popc * sizeof(T)) != 0) {
