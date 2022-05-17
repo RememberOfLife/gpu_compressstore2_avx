@@ -359,7 +359,7 @@ def mt_speedup_over_thread_count(
     fig, ax = plt.subplots(1, dpi=200, figsize=(16, 7))
     ax.set_xlabel("thread count")
 
-    ax.set_ylabel("mt speedup (percent)")
+    ax.set_ylabel("mt speedup")
 
     max_elem_count = max_col_val(data, ELEMENT_COUNT_COL)
     ax.set_title("multi threading speedup" +
@@ -387,7 +387,7 @@ def mt_speedup_over_thread_count(
         y = []
         for tc in thread_counts:
             s_rows = by_thread_count[tc]
-            avg = col_average(s_rows, THROUGHPUT_COL) / st_throughput_avg * 100
+            avg = col_average(s_rows, THROUGHPUT_COL) / st_throughput_avg
             y.append(avg)
 
         ax.plot(
@@ -429,7 +429,7 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
     ax.set_title(y_axis_name +
                  " over selectivity "
                  + (f"for {name_appendage} " if name_appendage else "")
-                 + f"(element count = {max_elem_count})")
+                 + f"(element count = {max_elem_count}) (thread count = best in class)")
 
     elem_count_filtered = filter_col_val(
         data, ELEMENT_COUNT_COL, max_elem_count)
@@ -443,6 +443,13 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
     by_cases = classify(elem_count_filtered, CASE_COL)
 
     for case, rows in by_cases.items():
+        tc_classes = classify(rows, THREAD_COUNT_COL)
+        tc_max = class_with_highest_average(tc_classes, THREAD_COUNT_COL)
+        rows = tc_classes[tc_max]
+        # tc_max = max_col_val(rows, THREAD_COUNT_COL)
+        tc_label = f" tc = {tc_max}" if tc_max > 1 else ""
+        # only use the max thread count
+        rows = filter_col_val(rows, THREAD_COUNT_COL, tc_max)
         by_selectivity = classify(rows, SELECTIVITY_COL)
         selectivities = sorted(unique_col_vals(rows, SELECTIVITY_COL))
         x = selectivities
@@ -458,7 +465,7 @@ def throughput_over_selectivity(data, log=False, use_runtime=False, name_appenda
             marker=get_marker_from_str(case),
             color=get_color_from_str(case),
             markerfacecolor='none',
-            label=f"{case}", alpha=0.7)
+            label=f"{case}{tc_label}", alpha=0.7)
     ax.set_xticks(unique_col_vals(data, SELECTIVITY_COL))
     if log:
         ax.set_yscale("log")
@@ -566,7 +573,7 @@ def main():
     ]
 
     if len(data_avx):
-        jobs.append([
+        jobs.extend([
             lambda: throughput_over_selectivity(
                 data_avx, name_appendage="avx"),
             lambda: throughput_over_selectivity(
@@ -584,10 +591,10 @@ def main():
         jobs.append(lambda: throughput_over_thread_count(
             data, log=log, name_appendage=name_appendage, nz=nz
         ))
-        jobs.append(lambda: single_threaded_througput_over_thread_count(
-            data, log=log, name_appendage=name_appendage, nz=nz
-        ))
-        if not log:
+        if not log and not nz:
+            jobs.append(lambda: single_threaded_througput_over_thread_count(
+                data, log=log, name_appendage=name_appendage, nz=nz
+            ))
             jobs.append(lambda: mt_speedup_over_thread_count(
                 data, name_appendage=name_appendage, nz=nz
             ))
@@ -610,8 +617,8 @@ def main():
                     m,
                     True
                 )
-    # parallel(jobs)
-    sequential(jobs)
+    parallel(jobs)
+    # sequential(jobs)
 
 
 if __name__ == "__main__":
