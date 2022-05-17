@@ -100,7 +100,8 @@ uint8_t reverse_byte(uint8_t b) {
 template <typename T>
 float launch_avx_compressstore(T* input, uint8_t* mask, T* output, uint64_t N) {
     // create temporary mask buffer with reverse bit order per byte (avx req)
-    uint8_t* reverse_mask = (uint8_output{
+    uint8_t* reverse_mask = (uint8_t*)malloc(sizeof(uint8_t) * N/8);
+    for (int i = 0; i < N/8; i++) {
         reverse_mask[i] = reverse_byte(mask[i]);
     }
     std::chrono::time_point<std::chrono::steady_clock> start_clock = std::chrono::steady_clock::now();

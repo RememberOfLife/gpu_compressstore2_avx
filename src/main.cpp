@@ -11,7 +11,7 @@
 #include "cpu_st.hpp"
 #include "mask_gen.hpp"
 
-#define OMP_THREAD_LIMIT 16
+#define OMP_THREAD_LIMIT 64
 
 #define VALIDATION true
 
@@ -196,22 +196,20 @@ void mt_benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
 template <typename T> void benchmark_type(const char* type_str)
 {
     printf("type: %s", type_str);
-    for (uint64_t N = 1<<30; N <= (1 << 30); N *= 2) {
-        // for (float ms = 0.1; ms < 1.0; ms += 0.1) {
-            float ms = 0.5;
+    for (uint64_t N = 1<<10; N <= (1 << 30); N *= 4) {
+        for (float ms = 0.1; ms < 1.0; ms += 0.1) {
             benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
             printf(".");
-            // benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
-            // printf(".");
-            // benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
-            // printf(".");
+            benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
+            printf(".");
+            benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
+            printf(".");
             mt_benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
-            // printf(".");
-            // mt_benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
-            // printf(".");
-            // mt_benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
-            // printf(".");
-        // }
+            printf(".");
+            mt_benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
+            printf(".");
+            mt_benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
+            printf(".");
     }
     printf("\n");
 }
