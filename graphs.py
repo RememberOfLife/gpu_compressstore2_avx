@@ -18,14 +18,15 @@ import numpy as np
 
 # columns
 APPROACH_COL = 0
-DATA_TYPE_COL = 1
-ELEMENT_COUNT_COL = 2
-MASK_DISTRIBUTION_KIND_COL = 3
-SELECTIVITY_COL = 4
-RUNTIME_MS_COL = 5
-THROUGHPUT_COL = 6
-CASE_COL = 7
-COLUMN_COUNT = 8
+THREAD_COUNT_COL = 1
+DATA_TYPE_COL = 2
+ELEMENT_COUNT_COL = 3
+MASK_DISTRIBUTION_KIND_COL = 4
+SELECTIVITY_COL = 5
+RUNTIME_MS_COL = 6
+THROUGHPUT_COL = 7
+CASE_COL = 8
+COLUMN_COUNT = 9
 VIRTUAL_COLUMN_COUNT = 2
 
 COLUMNS = list(range(0, COLUMN_COUNT))
@@ -212,6 +213,200 @@ def abort_plot(plot_name):
 # graph generators
 
 
+def throughput_over_thread_count(data, log=False, use_runtime=False, name_appendage=None, nz=None):
+    y_axis_name = ("runtime" if use_runtime else "throughput")
+    plot_name = (
+        y_axis_name
+        + "_over_thread_count"
+        + (f"_{name_appendage}" if name_appendage else "")
+        + ("_log" if log else "")
+        + ("_nz" if nz else "")
+        + ".png"
+    )
+    y_val_col = RUNTIME_MS_COL if use_runtime else THROUGHPUT_COL
+    fig, ax = plt.subplots(1, dpi=200, figsize=(16, 7))
+    ax.set_xlabel("thread count")
+    if use_runtime:
+        ax.set_ylabel("runtime (ms)")
+    else:
+        ax.set_ylabel("throughput (GiB/s)")
+
+    max_elem_count = max_col_val(data, ELEMENT_COUNT_COL)
+    ax.set_title(y_axis_name +
+                 " over thread count "
+                 + (f"for {name_appendage} " if name_appendage else "")
+                 + f"(element count = {max_elem_count})")
+
+    elem_count_filtered = filter_col_val(
+        data, ELEMENT_COUNT_COL, max_elem_count)
+    if (
+        len(elem_count_filtered) == 0
+        or len(unique_col_vals(data, THREAD_COUNT_COL)) < 2
+    ):
+        abort_plot(plot_name)
+        return
+
+    by_cases = classify(elem_count_filtered, CASE_COL)
+
+    for case, rows in by_cases.items():
+        by_thread_count = classify(rows, THREAD_COUNT_COL)
+        thread_counts = sorted(unique_col_vals(rows, THREAD_COUNT_COL))
+        x = thread_counts
+        y = []
+        for s in thread_counts:
+            s_rows = by_thread_count[s]
+            avg = col_average(s_rows, y_val_col)
+            y.append(avg)
+
+        ax.plot(
+            x, y,
+            marker=get_marker_from_str(case),
+            color=get_color_from_str(case),
+            markerfacecolor='none',
+            label=f"{case}", alpha=0.7)
+    ax.set_xticks(unique_col_vals(data, THREAD_COUNT_COL))
+    if log:
+        ax.set_yscale("log")
+        ax.set_ylim(min_col_val(elem_count_filtered, y_val_col))
+    else:
+        if not nz:
+            ax.set_ylim(0)
+
+    fig.subplots_adjust(bottom=0.3, wspace=0.33,
+                        left=0.05, right=0.95, top=0.95)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
+
+    fig.savefig(plot_name)
+
+
+def single_threaded_througput_over_thread_count(
+    data, log=False, use_runtime=False, name_appendage=None, nz=None
+):
+    plot_name = (
+        "single_threaded_througput"
+        + "_over_thread_count"
+        + (f"_{name_appendage}" if name_appendage else "")
+        + ("_log" if log else "")
+        + ("_nz" if nz else "")
+        + ".png"
+    )
+    y_val_col = RUNTIME_MS_COL if use_runtime else THROUGHPUT_COL
+    fig, ax = plt.subplots(1, dpi=200, figsize=(16, 7))
+    ax.set_xlabel("thread count")
+    if use_runtime:
+        ax.set_ylabel("runtime (ms)")
+    else:
+        ax.set_ylabel("throughput (GiB/s)")
+
+    max_elem_count = max_col_val(data, ELEMENT_COUNT_COL)
+    ax.set_title("single threaded througput" +
+                 " over thread count "
+                 + (f"for {name_appendage} " if name_appendage else "")
+                 + f"(element count = {max_elem_count})")
+
+    elem_count_filtered = filter_col_val(
+        data, ELEMENT_COUNT_COL, max_elem_count)
+    if (
+        len(elem_count_filtered) == 0
+        or len(unique_col_vals(data, THREAD_COUNT_COL)) < 2
+    ):
+        abort_plot(plot_name)
+        return
+
+    by_cases = classify(elem_count_filtered, CASE_COL)
+
+    for case, rows in by_cases.items():
+        by_thread_count = classify(rows, THREAD_COUNT_COL)
+        thread_counts = sorted(unique_col_vals(rows, THREAD_COUNT_COL))
+        x = thread_counts
+        y = []
+        for tc in thread_counts:
+            s_rows = by_thread_count[tc]
+            avg = col_average(s_rows, y_val_col) / tc
+            y.append(avg)
+
+        ax.plot(
+            x, y,
+            marker=get_marker_from_str(case),
+            color=get_color_from_str(case),
+            markerfacecolor='none',
+            label=f"{case}", alpha=0.7)
+    ax.set_xticks(unique_col_vals(data, THREAD_COUNT_COL))
+    if log:
+        ax.set_yscale("log")
+        ax.set_ylim(min_col_val(elem_count_filtered, y_val_col))
+    else:
+        if not nz:
+            ax.set_ylim(0)
+
+    fig.subplots_adjust(bottom=0.3, wspace=0.33,
+                        left=0.05, right=0.95, top=0.95)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
+
+    fig.savefig(plot_name)
+
+
+def mt_speedup_over_thread_count(
+    data, name_appendage=None, nz=None
+):
+    plot_name = (
+        "mt_speedup_over_thread_count"
+        + "_over_thread_count"
+        + (f"_{name_appendage}" if name_appendage else "")
+        + ("_nz" if nz else "")
+        + ".png"
+    )
+    fig, ax = plt.subplots(1, dpi=200, figsize=(16, 7))
+    ax.set_xlabel("thread count")
+
+    ax.set_ylabel("mt speedup (percent)")
+
+    max_elem_count = max_col_val(data, ELEMENT_COUNT_COL)
+    ax.set_title("multi threading speedup" +
+                 " over thread count "
+                 + (f"for {name_appendage} " if name_appendage else "")
+                 + f"(element count = {max_elem_count})")
+
+    elem_count_filtered = filter_col_val(
+        data, ELEMENT_COUNT_COL, max_elem_count)
+    if (
+        len(elem_count_filtered) == 0
+        or len(unique_col_vals(data, THREAD_COUNT_COL)) < 2
+    ):
+        abort_plot(plot_name)
+        return
+
+    by_cases = classify(elem_count_filtered, CASE_COL)
+
+    for case, rows in by_cases.items():
+        st_throughput_avg = col_average(filter_col_val(
+            rows, THREAD_COUNT_COL, 1), THROUGHPUT_COL)
+        by_thread_count = classify(rows, THREAD_COUNT_COL)
+        thread_counts = sorted(unique_col_vals(rows, THREAD_COUNT_COL))
+        x = thread_counts
+        y = []
+        for tc in thread_counts:
+            s_rows = by_thread_count[tc]
+            avg = col_average(s_rows, THROUGHPUT_COL) / st_throughput_avg * 100
+            y.append(avg)
+
+        ax.plot(
+            x, y,
+            marker=get_marker_from_str(case),
+            color=get_color_from_str(case),
+            markerfacecolor='none',
+            label=f"{case}", alpha=0.7)
+    ax.set_xticks(unique_col_vals(data, THREAD_COUNT_COL))
+    if not nz:
+        ax.set_ylim(0)
+
+    fig.subplots_adjust(bottom=0.3, wspace=0.33,
+                        left=0.05, right=0.95, top=0.95)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3)
+
+    fig.savefig(plot_name)
+
+
 def throughput_over_selectivity(data, log=False, use_runtime=False, name_appendage=None, nz=None):
     y_axis_name = ("runtime" if use_runtime else "throughput")
     plot_name = (
@@ -288,6 +483,7 @@ def read_csv(path):
         for csv_row in reader:
             data_row = [None] * COLUMN_COUNT
             data_row[APPROACH_COL] = csv_row[APPROACH_COL]
+            data_row[THREAD_COUNT_COL] = int(csv_row[THREAD_COUNT_COL])
             data_row[DATA_TYPE_COL] = csv_row[DATA_TYPE_COL]
             data_row[ELEMENT_COUNT_COL] = int(csv_row[ELEMENT_COUNT_COL])
             data_row[MASK_DISTRIBUTION_KIND_COL] = csv_row[MASK_DISTRIBUTION_KIND_COL]
@@ -363,21 +559,43 @@ def main():
     jobs = [
         lambda: throughput_over_selectivity(data_avg),
         lambda: throughput_over_selectivity(data_avg, True),
-        lambda: throughput_over_selectivity(data_avx, name_appendage="avx"),
-        lambda: throughput_over_selectivity(
-            data_avx, name_appendage="avx", nz=True),
-        lambda: throughput_over_selectivity(
-            data_avx, True, name_appendage="avx"),
+        lambda: throughput_over_thread_count(data_avg),
+        lambda: throughput_over_thread_count(data_avg, True),
+        lambda: single_threaded_througput_over_thread_count(data_avg),
+        lambda: mt_speedup_over_thread_count(data_avg)
     ]
 
-    def add_tos_job(jobs, data, log, name_appendage, nz):
+    if len(data_avx):
+        jobs.append([
+            lambda: throughput_over_selectivity(
+                data_avx, name_appendage="avx"),
+            lambda: throughput_over_selectivity(
+                data_avx, name_appendage="avx", nz=True),
+            lambda: throughput_over_selectivity(
+                data_avx, True, name_appendage="avx"),
+        ])
+    else:
+        print("no avx benchmarks found.")
+
+    def add_clustering_job(jobs, data, log, name_appendage, nz):
         jobs.append(lambda: throughput_over_selectivity(
             data, log=log, name_appendage=name_appendage, nz=nz
         ))
+        jobs.append(lambda: throughput_over_thread_count(
+            data, log=log, name_appendage=name_appendage, nz=nz
+        ))
+        jobs.append(lambda: single_threaded_througput_over_thread_count(
+            data, log=log, name_appendage=name_appendage, nz=nz
+        ))
+        if not log:
+            jobs.append(lambda: mt_speedup_over_thread_count(
+                data, name_appendage=name_appendage, nz=nz
+            ))
+
     mdks = unique_col_vals(data_avg, MASK_DISTRIBUTION_KIND_COL)
     for m in mdks:
         for is_log in [False, True]:
-            add_tos_job(
+            add_clustering_job(
                 jobs,
                 filter_col_val(data_avg, MASK_DISTRIBUTION_KIND_COL, m),
                 is_log,
@@ -385,7 +603,7 @@ def main():
                 None
             )
             if not is_log:
-                add_tos_job(
+                add_clustering_job(
                     jobs,
                     filter_col_val(data_avg, MASK_DISTRIBUTION_KIND_COL, m),
                     is_log,
