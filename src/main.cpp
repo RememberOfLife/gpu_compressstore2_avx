@@ -15,6 +15,10 @@
 
 #define VALIDATION true
 
+#ifndef DATASUBSET
+#define DATASUBSET false
+#endif
+
 #define REPS 5
 
 FILE* output;
@@ -43,6 +47,8 @@ template <typename T> struct bufs {
         out1 = (T*)malloc(N * sizeof(T));
         out2 = (T*)malloc(N * sizeof(T));
         mask = (uint8_t*)malloc(N / 8);
+        // put some data into the input
+        create_bitmask_uniform((uint8_t*)in, N*sizeof(T)*8, 0.5);
     }
     ~bufs()
     {
@@ -196,20 +202,26 @@ void mt_benchmark(uint64_t N, MASK_TYPE mt, float ms, const char* type_str)
 template <typename T> void benchmark_type(const char* type_str)
 {
     printf("type: %s", type_str);
-    for (uint64_t N = 1<<10; N <= (1 << 30); N *= 4) {
-        for (float ms = 0.1; ms < 1.0; ms += 0.1) {
-            benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
-            printf(".");
+    for (uint64_t N = DATASUBSET ? 1<<30 : 1<<10; N <= (1 << 30); N *= 4) {
+        float ms = 0.5;
+#if !DATASUBSET
+        for (ms = 0.1; ms < 1.0; ms += 0.1) {
             benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
             printf(".");
             benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
             printf(".");
+#endif
+            benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
+            printf(".");
             mt_benchmark<T>(N, MASK_TYPE_UNIFORM, ms, type_str);
             printf(".");
+#if !DATASUBSET
             mt_benchmark<T>(N, MASK_TYPE_CLUSTER, ms, type_str);
             printf(".");
             mt_benchmark<T>(N, MASK_TYPE_MULTICLUSTER, ms, type_str);
             printf(".");
+        }
+#endif
     }
     printf("\n");
 }

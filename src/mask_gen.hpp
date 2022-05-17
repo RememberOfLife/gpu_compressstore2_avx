@@ -8,16 +8,21 @@
 
 inline void create_bitmask_uniform(uint8_t* mask, uint64_t N, float sel)
 {
-    fast_prng rng(42);
-    for (int i = 0; i < N/8; i++) {
-    uint8_t acc = 0;
-    for (int j = 7; j >= 0; j--) {
-        if (rng.rand() < sel*UINT32_MAX) {
-            acc |= (1<<j);
+    #pragma omp parallel for
+    for (int t = 0; t < 32; t++) {
+        fast_prng rng(t);
+        uint8_t* my_mask = mask + (t*N/8/32);
+        uint64_t my_N = N / 32;
+        for (int i = 0; i < my_N/8; i++) {
+            uint8_t acc = 0;
+            for (int j = 7; j >= 0; j--) {
+                if (rng.rand() < sel*UINT32_MAX) {
+                    acc |= (1<<j);
+                }
+            }
+            reinterpret_cast<uint8_t*>(my_mask)[i] = acc;
         }
     }
-    reinterpret_cast<uint8_t*>(mask)[i] = acc;
-}
 }
 
 inline std::vector<uint8_t> create_bitmask(float selectivity, size_t cluster_count, size_t total_elements)
@@ -29,8 +34,11 @@ inline std::vector<uint8_t> create_bitmask(float selectivity, size_t cluster_cou
     size_t slice = bitset.size() / cluster_count;
 
     // start by setting all to zero
-    for (int i = 0; i < bitset.size(); i++) {
-        bitset[i] = 0;
+    #pragma omp parallel for
+    for (int t = 0; t < 32; t++) {
+        for (int i = t*bitset.size()/32; i < (t+1)*bitset.size()/32; i++) {
+            bitset[i] = 0;
+        }
     }
 
     for (int i = 0; i < cluster_count; i++) {
@@ -47,15 +55,18 @@ inline std::vector<uint8_t> create_bitmask(float selectivity, size_t cluster_cou
         final_bitmask_cpu[i] = 0;
     }
 
-    for (int i = 0; i < bitset.size(); i++) {
-        // set bit of uint8
-        if (bitset[i]) {
-            uint8_t current = final_bitmask_cpu[i / 8];
-            int location = i % 8;
-            current = 1 << (7 - location);
-            uint8_t add_res = final_bitmask_cpu[i / 8];
-            add_res = add_res | current;
-            final_bitmask_cpu[i / 8] = add_res;
+    #pragma omp parallel for
+    for (int t = 0; t < 32; t++) {
+        for (int i = t*bitset.size()/32; i < (t+1)*bitset.size()/32; i++) {
+            // set bit of uint8
+            if (bitset[i]) {
+                uint8_t current = final_bitmask_cpu[i / 8];
+                int location = i % 8;
+                current = 1 << (7 - location);
+                uint8_t add_res = final_bitmask_cpu[i / 8];
+                add_res = add_res | current;
+                final_bitmask_cpu[i / 8] = add_res;
+            }
         }
     }
 
